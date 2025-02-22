@@ -1,0 +1,120 @@
+# Step 1: Set up Django Project
+# Run the following commands in your terminal
+# django-admin startproject gas_service
+# cd gas_service
+# django-admin startapp service_requests
+
+# Step 2: Install required dependencies
+# pip install django djangorestframework
+
+# Step 3: Update settings.py
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'rest_framework',
+    'service_requests',
+]
+
+# Step 4: Define Models in service_requests/models.py
+from django.db import models
+from django.contrib.auth.models import User
+
+class ServiceRequest(models.Model):
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('In Progress', 'In Progress'),
+        ('Resolved', 'Resolved'),
+    ]
+    customer = models.ForeignKey(User, on_delete=models.CASCADE)
+    service_type = models.CharField(max_length=255)
+    description = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    attachment = models.FileField(upload_to='attachments/', blank=True, null=True)
+
+    def __str__(self):
+        return f"Request {self.id} - {self.status}"
+
+class SupportResponse(models.Model):
+    request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='responses')
+    support_rep = models.ForeignKey(User, on_delete=models.CASCADE)
+    response_text = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Response to Request {self.request.id}"
+
+# Step 5: Create Serializers in service_requests/serializers.py
+from rest_framework import serializers
+from .models import ServiceRequest, SupportResponse
+
+class ServiceRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceRequest
+        fields = '__all__'
+
+class SupportResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupportResponse
+        fields = '__all__'
+
+# Step 6: Define Views in service_requests/views.py
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from .models import ServiceRequest, SupportResponse
+from .serializers import ServiceRequestSerializer, SupportResponseSerializer
+
+class ServiceRequestViewSet(viewsets.ModelViewSet):
+    queryset = ServiceRequest.objects.all()
+    serializer_class = ServiceRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(customer=self.request.user)
+
+class SupportResponseViewSet(viewsets.ModelViewSet):
+    queryset = SupportResponse.objects.all()
+    serializer_class = SupportResponseSerializer
+    permission_classes = [IsAuthenticated]
+
+# Step 7: Define URLs in service_requests/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import ServiceRequestViewSet, SupportResponseViewSet
+
+router = DefaultRouter()
+router.register(r'service-requests', ServiceRequestViewSet)
+router.register(r'support-responses', SupportResponseViewSet)
+
+urlpatterns = [
+    path('', include(router.urls)),
+]
+
+# Step 8: Register Models in service_requests/admin.py
+from django.contrib import admin
+from .models import ServiceRequest, SupportResponse
+
+admin.site.register(ServiceRequest)
+admin.site.register(SupportResponse)
+
+# Step 9: Connect URLs in gas_service/urls.py
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/', include('service_requests.urls')),
+]
+
+# Step 10: Run Migrations & Start Server
+# python manage.py makemigrations
+# python manage.py migrate
+# python manage.py createsuperuser
+# python manage.py runserver
+
+# Now you can test APIs at /api/service-requests/ and /api/support-responses/
